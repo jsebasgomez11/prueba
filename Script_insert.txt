@@ -1,0 +1,7 @@
+-- Insertar sucursales
+INSERT INTO BranchOffice (BranchName, Location) VALUES ('Sucursal Centro', 'Centro Ciudad');
+INSERT INTO BranchOffice (BranchName, Location) VALUES ('Sucursal Norte', 'Zona Norte');
+
+-- Insertar centros de costos
+INSERT INTO CostCenter (CostCenterName, Description) VALUES ('Marketing', 'Centro de costos para marketing');
+INSERT INTO CostCenter (CostCenterName, Description) VALUES ('Desarrollo', 'Centro de costos para desarrollo de software');

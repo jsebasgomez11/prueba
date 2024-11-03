@@ -1,0 +1,47 @@
+CREATE TABLE Permission (
+    PermissionID INT PRIMARY KEY IDENTITY(1,1),
+    PermissionName VARCHAR(50) NOT NULL,
+    Description VARCHAR(255)
+);
+
+CREATE TABLE PermiRole (
+    RoleID INT PRIMARY KEY,
+    PermissionID INT,
+    FOREIGN KEY (PermissionID) REFERENCES Permission(PermissionID)
+);
+
+CREATE TABLE PermiUser (
+    UserID INT PRIMARY KEY,
+    PermissionID INT,
+    FOREIGN KEY (PermissionID) REFERENCES Permission(PermissionID)
+);
+
+CREATE TABLE PermiRoleRecord (
+    RoleID INT,
+    RecordID INT,
+    PermissionID INT,
+    FOREIGN KEY (RoleID) REFERENCES PermiRole(RoleID),
+    FOREIGN KEY (PermissionID) REFERENCES Permission(PermissionID),
+    PRIMARY KEY (RoleID, RecordID, PermissionID)
+);
+
+CREATE TABLE PermiUserRecord (
+    UserID INT,
+    RecordID INT,
+    PermissionID INT,
+    FOREIGN KEY (UserID) REFERENCES PermiUser(UserID),
+    FOREIGN KEY (PermissionID) REFERENCES Permission(PermissionID),
+    PRIMARY KEY (UserID, RecordID, PermissionID)
+);
+
+CREATE TABLE sucursalOffice (
+    BranchID INT PRIMARY KEY IDENTITY(1,1),
+    BranchName VARCHAR(100) NOT NULL,
+    Location VARCHAR(100)
+);
+
+CREATE TABLE CostCenter (
+    CostCenterID INT PRIMARY KEY IDENTITY(1,1),
+    CostCenterName VARCHAR(100) NOT NULL,
+    Description VARCHAR(255)
+);

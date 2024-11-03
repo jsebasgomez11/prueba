@@ -1,0 +1,106 @@
+CREATE PROCEDURE GetUserPermissions
+    @EntityID INT,
+    @UserID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Tabla temporal para almacenar los permisos
+    CREATE TABLE #UserPermissions (
+        PermissionName VARCHAR(50),
+        Level VARCHAR(50) -- Indica si es a nivel de entidad o de registro
+    );
+
+    -- 1. Obtener permisos asignados directamente al usuario a nivel de entidad
+    INSERT INTO #UserPermissions (PermissionName, Level)
+    SELECT p.PermissionName, 'Entity'
+    FROM PermiUser pu
+    JOIN Permission p ON pu.PermissionID = p.PermissionID
+    WHERE pu.UserID = @UserID;
+
+    -- 2. Obtener permisos asignados a roles que tiene el usuario a nivel de entidad
+    INSERT INTO #UserPermissions (PermissionName, Level)
+    SELECT p.PermissionName, 'Entity'
+    FROM PermiRole pr
+    JOIN Permission p ON pr.PermissionID = p.PermissionID
+    JOIN UserRoles ur ON ur.RoleID = pr.RoleID -- Supongamos que existe una tabla UserRoles
+    WHERE ur.UserID = @UserID;
+
+    -- 3. Obtener permisos asignados al usuario sobre registros específicos
+    INSERT INTO #UserPermissions (PermissionName, Level)
+    SELECT p.PermissionName, 'Record'
+    FROM PermiUserRecord ur
+    JOIN Permission p ON ur.PermissionID = p.PermissionID
+    WHERE ur.UserID = @UserID AND ur.RecordID = @EntityID;
+
+    -- 4. Obtener permisos asignados a roles sobre registros específicos
+    INSERT INTO #UserPermissions (PermissionName, Level)
+    SELECT p.PermissionName, 'Record'
+    FROM PermiRoleRecord rr
+    JOIN Permission p ON rr.PermissionID = p.PermissionID
+    JOIN UserRoles ur ON ur.RoleID = rr.RoleID -- Supongamos que existe una tabla UserRoles
+    WHERE ur.UserID = @UserID AND rr.RecordID = @EntityID;
+
+    -- 5. Devolver resultados
+    SELECT DISTINCT PermissionName, Level
+    FROM #UserPermissions;
+
+    -- Limpiar tabla temporal
+    DROP TABLE #UserPermissions;
+END;
+
+---------------------------------------------------------------------------
+
+CREATE PROCEDURE AssignRecordPermission
+    @RecordID INT,
+    @UserID INT = NULL,
+    @RoleID INT = NULL,
+    @PermissionID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @UserID IS NOT NULL
+    BEGIN
+        INSERT INTO PermiUserRecord (UserID, RecordID, PermissionID)
+        VALUES (@UserID, @RecordID, @PermissionID);
+    END
+    ELSE IF @RoleID IS NOT NULL
+    BEGIN
+        INSERT INTO PermiRoleRecord (RoleID, RecordID, PermissionID)
+        VALUES (@RoleID, @RecordID, @PermissionID);
+    END
+    ELSE
+    BEGIN
+        RAISERROR('Debes proporcionar un UserID o un RoleID.', 16, 1);
+    END
+END;
+
+-----------------------------------------------------------
+
+CREATE PROCEDURE AssignEntityPermission
+    @EntityID INT,
+    @UserID INT = NULL,
+    @RoleID INT = NULL,
+    @PermissionID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @UserID IS NOT NULL
+    BEGIN
+        INSERT INTO PermiUser (UserID, PermissionID)
+        VALUES (@UserID, @PermissionID);
+    END
+    ELSE IF @RoleID IS NOT NULL
+    BEGIN
+        INSERT INTO PermiRole (RoleID, PermissionID)
+        VALUES (@RoleID, @PermissionID);
+    END
+    ELSE
+    BEGIN
+        RAISERROR('Debes proporcionar un UserID o un RoleID.', 16, 1);
+    END
+END;
+----------------------
+
