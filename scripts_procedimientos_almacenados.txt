@@ -210,23 +210,7 @@ BEGIN
         AND prr.perrc_record IS NOT NULL
         AND prr.perrc_include = 1; -- Solo permisos incluidos
 
-    -- 5. Eliminar duplicados: Si un usuario tiene permisos tanto a nivel de entidad como a nivel de registro, los permisos de registro prevalecen.
-    WITH OrderedPermissions AS (
-        SELECT 
-            PermissionName,
-            CanCreate,
-            CanRead,
-            CanUpdate,
-            CanDelete,
-            CanImport,
-            CanExport,
-            IsSpecificRecord,
-            ROW_NUMBER() OVER (PARTITION BY PermissionName ORDER BY IsSpecificRecord DESC) AS RowNum
-        FROM @Permissions
-    )
-    DELETE FROM OrderedPermissions WHERE RowNum > 1;
-
     -- Devolver los permisos asignados
-    SELECT * FROM OrderedPermissions;
+    SELECT * FROM @Permissions;
 END;
 
