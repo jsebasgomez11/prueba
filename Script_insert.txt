@@ -1,7 +1,70 @@
--- Insertar sucursales
-INSERT INTO BranchOffice (BranchName, Location) VALUES ('Sucursal Centro', 'Centro Ciudad');
-INSERT INTO BranchOffice (BranchName, Location) VALUES ('Sucursal Norte', 'Zona Norte');
 
--- Insertar centros de costos
-INSERT INTO CostCenter (CostCenterName, Description) VALUES ('Marketing', 'Centro de costos para marketing');
-INSERT INTO CostCenter (CostCenterName, Description) VALUES ('Desarrollo', 'Centro de costos para desarrollo de software');
+-- Insertar Datos en la Tabla Company
+INSERT INTO Company (compa_name, compa_tradename, compa_doctype, compa_docnum, compa_address, compa_city, compa_state, compa_country, compa_industry, compa_phone, compa_email, compa_website, compa_logo, compa_active)
+VALUES 
+('Compañía Ejemplo S.A.', 'Compañía Ejemplo', 'CC', '123456789', 'Calle Ficticia 123', 'Ciudad Ficticia', 'Estado Ficticio', 'País Ficticio', 'Tecnología', '+1234567890', 'contacto@ejemplo.com', 'http://www.ejemplo.com', NULL, 1);
+
+--Insertar Datos en la Tabla BranchOffice
+INSERT INTO BranchOffice (company_id, broff_name, broff_code, broff_address, broff_city, broff_state, broff_country, broff_phone, broff_email, broff_active)
+VALUES 
+(1, 'Sucursal Centro', 'BR-001', 'Avenida Central 456', 'Ciudad Ficticia', 'Estado Ficticio', 'País Ficticio', '+1234567891', 'centro@ejemplo.com', 1);
+
+--Insertar Datos en la Tabla Role
+INSERT INTO Role (company_id, role_name, role_code, role_description, role_active)
+VALUES 
+(1, 'Administrador', 'ADM', 'Rol con permisos completos sobre la empresa', 1),
+(1, 'Gerente', 'GER', 'Rol con permisos de gestión operativa', 1);
+
+--Insertar Datos en la Tabla User
+INSERT INTO [User] (user_username, user_password, user_email, user_phone, user_is_admin, user_is_active)
+VALUES 
+('jdoe', 'password_encriptado', 'jdoe@ejemplo.com', '+1234567892', 0, 1),
+('admin', 'admin_encriptado', 'admin@ejemplo.com', '+1234567893', 1, 1);
+
+--Insertar Datos en la Tabla UserCompany
+INSERT INTO UserCompany (user_id, company_id, useco_active)
+VALUES 
+(1, 1, 1),  -- Usuario 'jdoe' asignado a la compañía 'Compañía Ejemplo S.A.'
+(2, 1, 1);  -- Usuario 'admin' asignado a la compañía 'Compañía Ejemplo S.A.'
+
+--Insertar Datos en la Tabla CostCenter
+INSERT INTO CostCenter (company_id, cosce_parent_id, cosce_code, cosce_name, cosce_description, cosce_budget, cosce_level, cosce_active)
+VALUES 
+(1, NULL, 'CC-001', 'Centro de Costo Principal', 'Centro de costo para operaciones generales', 100000.00, 1, 1),
+(1, 1, 'CC-002', 'Centro de Costo IT', 'Centro de costo para infraestructura tecnológica', 50000.00, 2, 1);
+
+--Insertar Datos en la Tabla EntityCatalog
+INSERT INTO EntityCatalog (entit_name, entit_descrip, entit_active, entit_config)
+VALUES 
+('Sucursal', 'Entidad que representa una sucursal de la empresa', 1, NULL),
+('Centro de Costo', 'Entidad que representa un centro de costo dentro de la empresa', 1, NULL);
+
+--Insertar Datos en la Tabla Permission
+INSERT INTO Permission (name, description, can_create, can_read, can_update, can_delete, can_import, can_export)
+VALUES 
+('Acceso Total', 'Permiso para acceso completo (crear, leer, actualizar, eliminar)', 1, 1, 1, 1, 1, 1),
+('Solo Lectura', 'Permiso solo para lectura', 0, 1, 0, 0, 0, 0);
+
+--Insertar Datos en la Tabla PermiRole
+INSERT INTO PermiRole (role_id, permission_id, entitycatalog_id, perol_include)
+VALUES 
+(1, 1, 1, 1),  -- Rol 'Administrador' con el permiso 'Acceso Total' para 'Sucursal'
+(2, 2, 1, 1);  -- Rol 'Gerente' con el permiso 'Solo Lectura' para 'Sucursal'
+
+--Insertar Datos en la Tabla PermiUser
+INSERT INTO PermiUser (usercompany_id, permission_id, entitycatalog_id, peusr_include)
+VALUES 
+(1, 1, 1, 1),  -- Usuario 'jdoe' con el permiso 'Acceso Total' para 'Sucursal'
+(2, 2, 1, 1);  -- Usuario 'admin' con el permiso 'Solo Lectura' para 'Sucursal'
+
+--Insertar Datos en la Tabla PermiRoleRecord
+INSERT INTO PermiRoleRecord (role_id, permission_id, entitycatalog_id, perrc_record, perrc_include)
+VALUES 
+(1, 1, 1, 1, 1),  -- Rol 'Administrador' con el permiso 'Acceso Total' para la 'Sucursal' con ID 1
+(2, 2, 1, 2, 1);  -- Rol 'Gerente' con el permiso 'Solo Lectura' para la 'Sucursal' con ID 2
+
+--Insertar Datos en la Tabla PermiUserRecord
+INSERT INTO PermiUserRecord (usercompany_id, permission_id, entitycatalog_id, peusr_record, peusr_include)
+VALUES 
+(1, 1, 1, 1, 1),  -- Usuario 'jdoe' con el permiso 'Acceso Total' para la 'Sucursal' con ID 1
+(2, 2, 1, 2, 1);  -- Usuario 'admin' con el permiso 'Solo Lectura' para la 'Sucursal' con ID 2
