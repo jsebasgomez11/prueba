@@ -1,106 +1,232 @@
-CREATE PROCEDURE GetUserPermissions
-    @EntityID INT,
-    @UserID INT
+-- Asignar Permisos a Nivel de Entidad (Por Usuario o Rol)
+CREATE PROCEDURE AssignPermissionToEntity (
+    @role_id BIGINT = NULL,                        -- Identificador del rol (si es NULL, se asigna a un usuario)
+    @usercompany_id BIGINT = NULL,                 -- Identificador de la relación usuario-compañía
+    @permission_id BIGINT,                         -- Identificador del permiso
+    @entitycatalog_id INT,                         -- Identificador del catálogo de entidades
+    @pe_include BIT = 1                           -- Indica si se incluye (1) o se excluye (0) el permiso
+)
 AS
 BEGIN
-    SET NOCOUNT ON;
+    -- Verificar que el parámetro 'role_id' o 'usercompany_id' no estén ambos a NULL
+    IF @role_id IS NULL AND @usercompany_id IS NULL
+    BEGIN
+        RAISERROR('Se debe especificar un rol o un usuario-compañía.', 16, 1);
+        RETURN;
+    END
 
-    -- Tabla temporal para almacenar los permisos
-    CREATE TABLE #UserPermissions (
-        PermissionName VARCHAR(50),
-        Level VARCHAR(50) -- Indica si es a nivel de entidad o de registro
+    -- Verificar si ya existe el permiso asignado para la combinación
+    IF @role_id IS NOT NULL
+    BEGIN
+        -- Asignar permiso para un rol
+        IF EXISTS (
+            SELECT 1 FROM PermiRole
+            WHERE role_id = @role_id 
+            AND permission_id = @permission_id 
+            AND entitycatalog_id = @entitycatalog_id)
+        BEGIN
+            RAISERROR('El permiso ya está asignado a este rol para esta entidad.', 16, 1);
+            RETURN;
+        END
+
+        -- Insertar el nuevo permiso para el rol
+        INSERT INTO PermiRole (role_id, permission_id, entitycatalog_id, perol_include)
+        VALUES (@role_id, @permission_id, @entitycatalog_id, @pe_include);
+    END
+    ELSE IF @usercompany_id IS NOT NULL
+    BEGIN
+        -- Asignar permiso para un usuario
+        IF EXISTS (
+            SELECT 1 FROM PermiUser
+            WHERE usercompany_id = @usercompany_id 
+            AND permission_id = @permission_id 
+            AND entitycatalog_id = @entitycatalog_id)
+        BEGIN
+            RAISERROR('El permiso ya está asignado a este usuario para esta entidad.', 16, 1);
+            RETURN;
+        END
+
+        -- Insertar el nuevo permiso para el usuario
+        INSERT INTO PermiUser (usercompany_id, permission_id, entitycatalog_id, peusr_include)
+        VALUES (@usercompany_id, @permission_id, @entitycatalog_id, @pe_include);
+    END
+END
+
+
+-- Asignar Permisos a Nivel de Registro (Por Usuario o Rol)
+CREATE PROCEDURE AssignPermissionToRecord (
+    @role_id BIGINT = NULL,                        -- Identificador del rol (si es NULL, se asigna a un usuario)
+    @usercompany_id BIGINT = NULL,                 -- Identificador de la relación usuario-compañía
+    @permission_id BIGINT,                         -- Identificador del permiso
+    @entitycatalog_id INT,                         -- Identificador del catálogo de entidades
+    @record_id BIGINT,                             -- Identificador del registro específico
+    @pe_include BIT = 1                           -- Indica si se incluye (1) o se excluye (0) el permiso
+)
+AS
+BEGIN
+    -- Verificar que el parámetro 'role_id' o 'usercompany_id' no estén ambos a NULL
+    IF @role_id IS NULL AND @usercompany_id IS NULL
+    BEGIN
+        RAISERROR('Se debe especificar un rol o un usuario-compañía.', 16, 1);
+        RETURN;
+    END
+
+    -- Verificar si ya existe el permiso asignado para la combinación con el registro
+    IF @role_id IS NOT NULL
+    BEGIN
+        -- Asignar permiso para un rol y un registro específico
+        IF EXISTS (
+            SELECT 1 FROM PermiRoleRecord
+            WHERE role_id = @role_id 
+            AND permission_id = @permission_id 
+            AND entitycatalog_id = @entitycatalog_id 
+            AND perrc_record = @record_id)
+        BEGIN
+            RAISERROR('El permiso ya está asignado a este rol para este registro.', 16, 1);
+            RETURN;
+        END
+
+        -- Insertar el nuevo permiso para el rol y el registro específico
+        INSERT INTO PermiRoleRecord (role_id, permission_id, entitycatalog_id, perrc_record, perrc_include)
+        VALUES (@role_id, @permission_id, @entitycatalog_id, @record_id, @pe_include);
+    END
+    ELSE IF @usercompany_id IS NOT NULL
+    BEGIN
+        -- Asignar permiso para un usuario y un registro específico
+        IF EXISTS (
+            SELECT 1 FROM PermiUserRecord
+            WHERE usercompany_id = @usercompany_id 
+            AND permission_id = @permission_id 
+            AND entitycatalog_id = @entitycatalog_id 
+            AND peusr_record = @record_id)
+        BEGIN
+            RAISERROR('El permiso ya está asignado a este usuario para este registro.', 16, 1);
+            RETURN;
+        END
+
+        -- Insertar el nuevo permiso para el usuario y el registro específico
+        INSERT INTO PermiUserRecord (usercompany_id, permission_id, entitycatalog_id, peusr_record, peusr_include)
+        VALUES (@usercompany_id, @permission_id, @entitycatalog_id, @record_id, @pe_include);
+    END
+END
+
+CREATE PROCEDURE GetUserPermissions (
+    @EntityCatalogID INT,
+    @UserID BIGINT
+)
+AS
+BEGIN
+    -- Variables de resultado
+    DECLARE @Permissions TABLE (
+        PermissionName NVARCHAR(255),
+        CanCreate BIT,
+        CanRead BIT,
+        CanUpdate BIT,
+        CanDelete BIT,
+        CanImport BIT,
+        CanExport BIT,
+        IsSpecificRecord BIT
     );
 
-    -- 1. Obtener permisos asignados directamente al usuario a nivel de entidad
-    INSERT INTO #UserPermissions (PermissionName, Level)
-    SELECT p.PermissionName, 'Entity'
-    FROM PermiUser pu
-    JOIN Permission p ON pu.PermissionID = p.PermissionID
-    WHERE pu.UserID = @UserID;
+    -- 1. Obtener permisos a nivel de entidad para el usuario (PermiUser)
+    INSERT INTO @Permissions (PermissionName, CanCreate, CanRead, CanUpdate, CanDelete, CanImport, CanExport, IsSpecificRecord)
+    SELECT 
+        p.name AS PermissionName,
+        p.can_create AS CanCreate,
+        p.can_read AS CanRead,
+        p.can_update AS CanUpdate,
+        p.can_delete AS CanDelete,
+        p.can_import AS CanImport,
+        p.can_export AS CanExport,
+        0 AS IsSpecificRecord -- A nivel de entidad, no es un permiso específico de registro
+    FROM 
+        PermiUser pu
+        JOIN Permission p ON pu.permission_id = p.id_permi
+        WHERE pu.usercompany_id IN (
+            SELECT id_useco FROM UserCompany WHERE user_id = @UserID
+        ) 
+        AND pu.entitycatalog_id = @EntityCatalogID
+        AND pu.peusr_include = 1; -- Solo permisos incluidos
 
-    -- 2. Obtener permisos asignados a roles que tiene el usuario a nivel de entidad
-    INSERT INTO #UserPermissions (PermissionName, Level)
-    SELECT p.PermissionName, 'Entity'
-    FROM PermiRole pr
-    JOIN Permission p ON pr.PermissionID = p.PermissionID
-    JOIN UserRoles ur ON ur.RoleID = pr.RoleID -- Supongamos que existe una tabla UserRoles
-    WHERE ur.UserID = @UserID;
+    -- 2. Obtener permisos a nivel de entidad para el rol del usuario (PermiRole)
+    INSERT INTO @Permissions (PermissionName, CanCreate, CanRead, CanUpdate, CanDelete, CanImport, CanExport, IsSpecificRecord)
+    SELECT 
+        p.name AS PermissionName,
+        p.can_create AS CanCreate,
+        p.can_read AS CanRead,
+        p.can_update AS CanUpdate,
+        p.can_delete AS CanDelete,
+        p.can_import AS CanImport,
+        p.can_export AS CanExport,
+        0 AS IsSpecificRecord -- A nivel de entidad, no es un permiso específico de registro
+    FROM 
+        PermiRole pr
+        JOIN Permission p ON pr.permission_id = p.id_permi
+        WHERE pr.role_id IN (
+            SELECT role_id FROM UserCompanyRole WHERE user_id = @UserID
+        )
+        AND pr.entitycatalog_id = @EntityCatalogID
+        AND pr.perol_include = 1; -- Solo permisos incluidos
 
-    -- 3. Obtener permisos asignados al usuario sobre registros específicos
-    INSERT INTO #UserPermissions (PermissionName, Level)
-    SELECT p.PermissionName, 'Record'
-    FROM PermiUserRecord ur
-    JOIN Permission p ON ur.PermissionID = p.PermissionID
-    WHERE ur.UserID = @UserID AND ur.RecordID = @EntityID;
+    -- 3. Obtener permisos a nivel de registro para el usuario (PermiUserRecord)
+    INSERT INTO @Permissions (PermissionName, CanCreate, CanRead, CanUpdate, CanDelete, CanImport, CanExport, IsSpecificRecord)
+    SELECT 
+        p.name AS PermissionName,
+        p.can_create AS CanCreate,
+        p.can_read AS CanRead,
+        p.can_update AS CanUpdate,
+        p.can_delete AS CanDelete,
+        p.can_import AS CanImport,
+        p.can_export AS CanExport,
+        1 AS IsSpecificRecord -- Es un permiso específico de registro
+    FROM 
+        PermiUserRecord pur
+        JOIN Permission p ON pur.permission_id = p.id_permi
+        WHERE pur.usercompany_id IN (
+            SELECT id_useco FROM UserCompany WHERE user_id = @UserID
+        )
+        AND pur.entitycatalog_id = @EntityCatalogID
+        AND pur.peusr_record IS NOT NULL
+        AND pur.peusr_include = 1; -- Solo permisos incluidos
 
-    -- 4. Obtener permisos asignados a roles sobre registros específicos
-    INSERT INTO #UserPermissions (PermissionName, Level)
-    SELECT p.PermissionName, 'Record'
-    FROM PermiRoleRecord rr
-    JOIN Permission p ON rr.PermissionID = p.PermissionID
-    JOIN UserRoles ur ON ur.RoleID = rr.RoleID -- Supongamos que existe una tabla UserRoles
-    WHERE ur.UserID = @UserID AND rr.RecordID = @EntityID;
+    -- 4. Obtener permisos a nivel de registro para el rol del usuario (PermiRoleRecord)
+    INSERT INTO @Permissions (PermissionName, CanCreate, CanRead, CanUpdate, CanDelete, CanImport, CanExport, IsSpecificRecord)
+    SELECT 
+        p.name AS PermissionName,
+        p.can_create AS CanCreate,
+        p.can_read AS CanRead,
+        p.can_update AS CanUpdate,
+        p.can_delete AS CanDelete,
+        p.can_import AS CanImport,
+        p.can_export AS CanExport,
+        1 AS IsSpecificRecord -- Es un permiso específico de registro
+    FROM 
+        PermiRoleRecord prr
+        JOIN Permission p ON prr.permission_id = p.id_permi
+        WHERE prr.role_id IN (
+            SELECT role_id FROM UserCompanyRole WHERE user_id = @UserID
+        )
+        AND prr.entitycatalog_id = @EntityCatalogID
+        AND prr.perrc_record IS NOT NULL
+        AND prr.perrc_include = 1; -- Solo permisos incluidos
 
-    -- 5. Devolver resultados
-    SELECT DISTINCT PermissionName, Level
-    FROM #UserPermissions;
+    -- 5. Eliminar duplicados: Si un usuario tiene permisos tanto a nivel de entidad como a nivel de registro, los permisos de registro prevalecen.
+    WITH OrderedPermissions AS (
+        SELECT 
+            PermissionName,
+            CanCreate,
+            CanRead,
+            CanUpdate,
+            CanDelete,
+            CanImport,
+            CanExport,
+            IsSpecificRecord,
+            ROW_NUMBER() OVER (PARTITION BY PermissionName ORDER BY IsSpecificRecord DESC) AS RowNum
+        FROM @Permissions
+    )
+    DELETE FROM OrderedPermissions WHERE RowNum > 1;
 
-    -- Limpiar tabla temporal
-    DROP TABLE #UserPermissions;
+    -- Devolver los permisos asignados
+    SELECT * FROM OrderedPermissions;
 END;
-
----------------------------------------------------------------------------
-
-CREATE PROCEDURE AssignRecordPermission
-    @RecordID INT,
-    @UserID INT = NULL,
-    @RoleID INT = NULL,
-    @PermissionID INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    IF @UserID IS NOT NULL
-    BEGIN
-        INSERT INTO PermiUserRecord (UserID, RecordID, PermissionID)
-        VALUES (@UserID, @RecordID, @PermissionID);
-    END
-    ELSE IF @RoleID IS NOT NULL
-    BEGIN
-        INSERT INTO PermiRoleRecord (RoleID, RecordID, PermissionID)
-        VALUES (@RoleID, @RecordID, @PermissionID);
-    END
-    ELSE
-    BEGIN
-        RAISERROR('Debes proporcionar un UserID o un RoleID.', 16, 1);
-    END
-END;
-
------------------------------------------------------------
-
-CREATE PROCEDURE AssignEntityPermission
-    @EntityID INT,
-    @UserID INT = NULL,
-    @RoleID INT = NULL,
-    @PermissionID INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    IF @UserID IS NOT NULL
-    BEGIN
-        INSERT INTO PermiUser (UserID, PermissionID)
-        VALUES (@UserID, @PermissionID);
-    END
-    ELSE IF @RoleID IS NOT NULL
-    BEGIN
-        INSERT INTO PermiRole (RoleID, PermissionID)
-        VALUES (@RoleID, @PermissionID);
-    END
-    ELSE
-    BEGIN
-        RAISERROR('Debes proporcionar un UserID o un RoleID.', 16, 1);
-    END
-END;
-----------------------
 
